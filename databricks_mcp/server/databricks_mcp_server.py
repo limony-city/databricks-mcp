@@ -592,12 +592,21 @@ class DatabricksMCPServer(FastMCP):
             )
 
         # SQL tools
-        @self.tool(name="execute_sql", description="Execute a SQL statement")
+        @self.tool(
+            name="execute_sql",
+            description=(
+                "Execute a SQL statement. Waits up to wait_timeout (default 50s, the "
+                "Statement Execution API maximum) for synchronous completion; if the "
+                "query is still running when the timeout expires the response carries "
+                "status=PENDING and a statement_id you can pass to get_statement_status."
+            ),
+        )
         async def execute_sql(
             statement: str,
             warehouse_id: Optional[str] = None,
             catalog: Optional[str] = None,
             schema_name: Optional[str] = None,
+            wait_timeout: str = "50s",
             ctx: Context | None = None,
         ) -> CallToolResult:
             async def action() -> Any:
@@ -607,6 +616,7 @@ class DatabricksMCPServer(FastMCP):
                     warehouse_id=warehouse_id,
                     catalog=catalog,
                     schema=schema_name,
+                    wait_timeout=wait_timeout,
                 )
                 await self._report_progress(ctx, 70, message="SQL statement completed")
                 return result
@@ -615,6 +625,43 @@ class DatabricksMCPServer(FastMCP):
                 "execute_sql",
                 action,
                 lambda data: f"SQL statement {data.get('statement_id', 'completed')} executed",
+                ctx,
+            )
+
+        @self.tool(
+            name="get_statement_status",
+            description=(
+                "Fetch the current status and (if available) result of a previously "
+                "submitted SQL statement by its statement_id. Use this to poll a "
+                "statement that execute_sql left in PENDING state."
+            ),
+        )
+        async def get_statement_status(
+            statement_id: str,
+            ctx: Context | None = None,
+        ) -> CallToolResult:
+            return await self._run_tool(
+                "get_statement_status",
+                lambda: sql.get_statement_status(statement_id),
+                lambda data: (
+                    f"Statement {statement_id} status: "
+                    f"{data.get('status', {}).get('state', 'UNKNOWN')}"
+                ),
+                ctx,
+            )
+
+        @self.tool(
+            name="cancel_statement",
+            description="Cancel a running SQL statement by its statement_id.",
+        )
+        async def cancel_statement(
+            statement_id: str,
+            ctx: Context | None = None,
+        ) -> CallToolResult:
+            return await self._run_tool(
+                "cancel_statement",
+                lambda: sql.cancel_statement(statement_id),
+                lambda _: f"Cancellation requested for statement {statement_id}",
                 ctx,
             )
 

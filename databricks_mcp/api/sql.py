@@ -20,41 +20,44 @@ async def execute_statement(
     parameters: Optional[Dict[str, Any]] = None,
     row_limit: int = 10000,
     byte_limit: int = 100000000,  # 100MB
+    wait_timeout: str = "50s",
 ) -> Dict[str, Any]:
     """
     Execute a SQL statement.
-    
+
     Args:
         statement: The SQL statement to execute
-        warehouse_id: ID of the SQL warehouse to use (optional if DATABRICKS_WAREHOUSE_ID is set) (optional if DATABRICKS_WAREHOUSE_ID is set)
+        warehouse_id: ID of the SQL warehouse to use (optional if DATABRICKS_WAREHOUSE_ID is set)
         catalog: Optional catalog to use
         schema: Optional schema to use
         parameters: Optional statement parameters
         row_limit: Maximum number of rows to return
         byte_limit: Maximum number of bytes to return
-        
+        wait_timeout: How long the Statement Execution API waits synchronously before
+            returning a PENDING handle. "0s" returns immediately; the API caps at "50s".
+
     Returns:
         Response containing query results
-        
+
     Raises:
         DatabricksAPIError: If the API request fails
         ValueError: If no warehouse_id is provided and DATABRICKS_WAREHOUSE_ID is not set
     """
     logger.info(f"Executing SQL statement: {statement[:100]}...")
-    
+
     # Use provided warehouse_id or fall back to environment variable
     effective_warehouse_id = warehouse_id or settings.DATABRICKS_WAREHOUSE_ID
-    
+
     if not effective_warehouse_id:
         raise ValueError(
             "warehouse_id must be provided either as parameter or "
             "set DATABRICKS_WAREHOUSE_ID environment variable"
         )
-    
+
     request_data = {
         "statement": statement,
         "warehouse_id": effective_warehouse_id,
-        "wait_timeout": "10s",
+        "wait_timeout": wait_timeout,
         "format": "JSON_ARRAY",
         "disposition": "INLINE",
         "row_limit": row_limit,
